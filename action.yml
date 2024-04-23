@@ -1,0 +1,89 @@
+# Creates a Pre-Release Release Candidate Github Tag
+# and Release when PR is merged/closed to develop
+# This workflow triggers only for changes in projects mentioned inside paths[]
+# Use PR label
+# norelease - when you do not want to release rc candidate but want to merge
+
+name: Release Candidate
+inputs:
+  repo-link:  # id of input
+    description: 'what is the link for the repo: ie. https://api.github.com/repos/tajawal/almosafer-business/'
+    required: true
+ 
+  node-version:  # id of input
+    description: 'which node version to use?'
+    required: false
+    default: '16.14'
+
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Install npm dependencies
+      run: npm ci
+
+    - name: Set git user
+      run: git config user.name seera-frontend && git config user.email seera-frontend@seera.sa
+
+    - name: Disable develop Protection
+      run: |
+        curl --location --request PUT '${{ inputs.repo-link }}/branches/develop/protection' \
+        --header 'Authorization: token ${{ secrets.SEERA_FRONTEND_TOKEN }}' \
+        --header 'Content-Type: application/json' \
+        --data-raw '{ "required_pull_request_reviews": null, "required_status_checks": null, "enforce_admins": null,"restrictions": null }'
+
+    - name: Default Release
+      id: defaultReleaseStep
+      run: echo "RELEASE_TYPE=patch" >> $GITHUB_ENV
+
+    - name: Release Type
+      id: releaseTypeStep
+      run: |
+        if [[ ${{ contains(github.event.pull_request.labels.*.name, 'patch') }} = "true" ]]; then
+          echo "RELEASE_TYPE=patch" >> $GITHUB_ENV
+        fi
+
+        if [[ ${{ contains(github.event.pull_request.labels.*.name, 'minor') }} = "true" ]]; then
+          echo "RELEASE_TYPE=minor" >> $GITHUB_ENV
+        fi
+
+        if [[ ${{ contains(github.event.pull_request.labels.*.name, 'major') }} = "true" ]]; then
+          echo "RELEASE_TYPE=major" >> $GITHUB_ENV
+        fi
+
+    - name: Release RC Tag
+      run: npm run release:rc $RELEASE_TYPE
+      id: releaseStep
+      env:
+        GITHUB_TOKEN: ${{ secrets.SEERA_FRONTEND_TOKEN }}
+      
+    - name: Get develop branch tag
+      run: echo "DEVELOP_TAG=$(echo $(git describe --tags --abbrev=0))" >> $GITHUB_ENV
+    
+    - name: Github Release
+      run: gh release create $DEVELOP_TAG --target develop --prerelease --title $DEVELOP_TAG
+      id: releaseStep
+      env:
+        GITHUB_TOKEN: ${{ secrets.SEERA_FRONTEND_TOKEN }}
+
+    - name: Enable develop Protection
+      run: |
+        curl --location --request PATCH '${{ inputs.repo-link }}/branches/develop/protection/required_pull_request_reviews' \
+        --header 'Authorization: token ${{ secrets.SEERA_FRONTEND_TOKEN }}' \
+        --header 'Content-Type: application/json' \
+        --data-raw '{}'
+
+# Ref: https://haya14busa.github.io/github-action-brandings/
+branding:
+  icon: 'check'
+  color: 'blue'
