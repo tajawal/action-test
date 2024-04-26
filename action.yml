@@ -31,9 +31,11 @@ runs:
 
     - name: Install npm dependencies
       run: npm ci
+      shell: bash
 
     - name: Set git user
       run: git config user.name seera-frontend && git config user.email seera-frontend@seera.sa
+      shell: bash
 
     - name: Disable develop Protection
       run: |
@@ -41,10 +43,12 @@ runs:
         --header 'Authorization: token ${{ secrets.SEERA_FRONTEND_TOKEN }}' \
         --header 'Content-Type: application/json' \
         --data-raw '{ "required_pull_request_reviews": null, "required_status_checks": null, "enforce_admins": null,"restrictions": null }'
+      shell: bash
 
     - name: Default Release
       id: defaultReleaseStep
       run: echo "RELEASE_TYPE=patch" >> $GITHUB_ENV
+      shell: bash
 
     - name: Release Type
       id: releaseTypeStep
@@ -60,21 +64,25 @@ runs:
         if [[ ${{ contains(github.event.pull_request.labels.*.name, 'major') }} = "true" ]]; then
           echo "RELEASE_TYPE=major" >> $GITHUB_ENV
         fi
+      shell: bash
 
     - name: Release RC Tag
       run: npm run release:rc $RELEASE_TYPE
+      shell: bash
       id: releaseStep
       env:
         GITHUB_TOKEN: ${{ secrets.SEERA_FRONTEND_TOKEN }}
       
     - name: Get develop branch tag
       run: echo "DEVELOP_TAG=$(echo $(git describe --tags --abbrev=0))" >> $GITHUB_ENV
+      shell: bash
     
     - name: Github Release
       run: gh release create $DEVELOP_TAG --target develop --prerelease --title $DEVELOP_TAG
       id: releaseStep
       env:
         GITHUB_TOKEN: ${{ secrets.SEERA_FRONTEND_TOKEN }}
+      shell: bash
 
     - name: Enable develop Protection
       run: |
@@ -82,6 +90,7 @@ runs:
         --header 'Authorization: token ${{ secrets.SEERA_FRONTEND_TOKEN }}' \
         --header 'Content-Type: application/json' \
         --data-raw '{}'
+      shell: bash
 
 # Ref: https://haya14busa.github.io/github-action-brandings/
 branding:
